@@ -74,7 +74,7 @@ class ogerdownloader:
             i = i.split(',')
             i[0] = self.d.rawDate2PythonDate(i[0].strip())  #convert date format.
             outf.write(','.join(i))
-        _info(' merged as context db file %s' % self.u.dbfile())
+        _info('merged as context db file %s' % self.u.dbfile())
 
     def gendbfile(self):
         self.downloadmonfiles()

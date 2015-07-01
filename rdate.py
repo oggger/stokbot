@@ -21,6 +21,7 @@ class ogerdate:
     ### return previous date on calendar
     def getPrevDate(self, d):
         oneday = datetime.timedelta(days=1)
+        if type(d) is str: d = datetime.datetime.strptime(d, '%Y-%m-%d')
         return d - oneday
 
     ### return date obj of yesterday

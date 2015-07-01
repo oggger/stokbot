@@ -6,7 +6,7 @@ import logging
 class ogerlogger:
     def __init__(self, name, level=logging.INFO):
         self.logger = logging.getLogger(name)
-        fmter = logging.Formatter('%(asctime)s %(name)s [%(levelname)s] %(message)s')
+        fmter = logging.Formatter('%(asctime)s %(name)4s [%(levelname)s] %(message)s')
         console = logging.StreamHandler()
         console.setLevel(level)
         console.setFormatter(fmter)

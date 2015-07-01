@@ -3,10 +3,13 @@
 import os
 import csv
 import re
+import datetime
+import sys
 from collections import OrderedDict
 
 from rutil import ogerutil
 from rdate import ogerdate
+from rdownload import ogerdownloader
 
 import logging
 from rlog import ogerlogger
@@ -20,14 +23,14 @@ _crit  = log.critical
 
 
 class ogercontext:
-    fields = { 'VolumeInUnit': [0,  None], # Trading volume in stock smallest unit
-               'TurnOver$'   : [1,  None], # TurnOver in value $$
+    fields = { 'AllVol'      : [0,  None], # Trading volume in stock smallest unit
+               'TurnOver'    : [1,  None], # TurnOver in value $$
                'Open'        : [2,  None], # openned price
                'High'        : [3,  None], # highest price
                'Low'         : [4,  None], # lowest price
                'Close'       : [5,  None], # closed price
                'Diff'        : [6,  None], # daily difference in +/-
-               'Transactions': [7,  None], # number of transaction 
+               'Trans'       : [7,  None], # number of transaction 
                #-------------- Above are from downloaded data.
                #-------------- Below are extended fields by ourself
                'Volume'      : [8,  None], # VolumeInUnit/1000 (rounding..)
@@ -44,8 +47,9 @@ class ogercontext:
 
     def __init__(self, sid):
         self.stock_id = sid
-        self.u = ogerutil(sid)
-        self.d = ogerdate()
+        self.u  = ogerutil(sid)
+        self.d  = ogerdate()
+        self.dl = ogerdownloader(sid)
         #build rfields - <n>:'name'
         for i in self.fields:
             self.rfields[self.fields[i][0]] = i
@@ -65,14 +69,14 @@ class ogercontext:
         self.db = OrderedDict()
         fn = self.u.dbfile()
         if not os.path.isfile(fn):
-            _error('dbfile %s is not valid.' % fn)
+            _err('dbfile %s is not valid.' % fn)
             return None
         with open(fn, 'rb') as f:
             csvlines = csv.reader(f, delimiter=',', quotechar='"')
             for row in csvlines:
                 self.db[row[0]] = row[1:]
         f.close()
-        _info(' context %s was loaded.' % fn)
+        _info('context %s was loaded.' % fn)
         ###FIXME, we can add pad() here 
         return self.db
 
@@ -86,7 +90,7 @@ class ogercontext:
                 d.insert(0, i)
                 writer.writerow(d)
         csvfile.close()
-        _info(' context db %s was saved.' % self.u.dbfile())
+        _info('context db %s was saved.' % self.u.dbfile())
 
     ### because downloaded/updated entries did not include extended fields.
     ### this function will extend db/list to expected fields
@@ -110,6 +114,84 @@ class ogercontext:
 
     def stat(self):
         _info('# of days : %d' % len(self.db))
+
+    ### start from today to check those continus date before that no data
+    ### we based on these dates to download and update context db.
+    def _getmissingdates(self):
+        dd = self.d.today()
+        if str(dd) in self.db:
+            _info("today's data is updated.")
+            return None
+
+        if dd.weekday() >= 5:
+            _info('%s is weekend, might no data to update.' % dd)
+
+        dates = list()
+        delta = datetime.timedelta(days=1)
+        while str(dd) not in self.db:
+            dates.append(str(dd))
+            dd -= delta
+        _debug('those are data missing dates: %s' % str(dates))
+        return dates
+
+    def _downloadmissingdata(self):
+        dates = self._getmissingdates()
+        if dates == None:
+            _info('no missing data need to be download')
+            return False
+        download = list()
+        for d in dates:
+            key = d[0:-3]
+            if key not in download:
+                _info('need to download monthly data. @%s' % key)
+                download.append(key)
+        if len(download) == 0:
+            logging.error('internal error')
+            return False
+        # download/update those montly data file.
+        for i in download:
+            i = i.split('-')
+            self.dl.downloadmonfile(int(i[0]), int(i[1]))
+        return dates
+        
+    def updatemissing(self):
+        _info('ID=%04d ready to download and update data up to today.' % self.stock_id)
+        dates = self._downloadmissingdata()
+        if dates == None:
+            _info('no data to be update.')
+            return False
+
+        updated = False
+        for dd in dates:
+            ds = dd.split('-')
+            (y, m, d) = (int(ds[0]), int(ds[1]), int(ds[2]))
+            fn = self.u.monfile(y,m)
+            if not os.path.isfile(fn):
+                _warn('file %s not exist. bypass data update.' % fn)
+                continue
+
+            with open(fn, 'rb') as f:
+                csvlines = csv.reader(f, delimiter=',', quotechar='"')
+                datefmt = re.compile('^[0-9]+\/[0-9]{2}\/[0-9]{2}') #yyyy-mm-dd
+                for row in csvlines:
+                    if datefmt.match(row[0].strip()):
+                        if self.d.rawDate2PythonDate(row[0]) == dd:
+                            _info('found new data @%s, append to contextDB' % dd)
+                            _info('%s' % str(row[1:]))
+                            self.db[dd] = row[1:]
+                            updated = True
+            f.close()
+        if updated == False: 
+            _info('ID=%04d no data to update.' % self.stock_id)
+            return False
+        ###FIXME, we should not do calextends() if data update not continusously
+        ###FIXME, we need to be able to check the market open dates to do so
+        self.pad()
+        self.calextends()
+        _info('ID=%04d missing data update procedure done.' % self.stock_id)
+        self.store()
+        return True
+        
 
     ###############################################################################
     # do calculation functions below ##############################################
@@ -171,3 +253,50 @@ class ogercontext:
         ddd = (2.0*dd/3.0) + (1.0*kk/3.0)
         _debug('cal 9d %.2f' % ddd)
         return round(ddd,2)
+
+    def dump(self, date, totmpfile=False):
+        if date not in self.db:
+            _warn('fail to dump. %s not exist' % date)
+            return
+        if totmpfile:
+            f = open(".tmp.dump", "w");
+            out = f.write
+        else:
+            out = sys.stdout.write
+
+        t = len(self.rfields)
+        div = 6
+        b = 0
+        e = div
+        sep = ('+' + '-'*17)*div + '+\n'
+        sep1 = ('+>>> %s <<' % date) + ('+' + '-'*17)*(div-1) + '+\n'
+        while b < e:
+            if b == 0:
+                out(sep1)
+            else:
+                out(sep)
+            for i in range(b, e):
+                out('| %15s ' % self.rfields[i])
+            out('|\n')
+            for i in range(b, e):
+                out('| %15s ' % self.db[date][i])
+            out('|\n')
+            b += (div)
+            e += (div)
+            if e > t:
+                e = t
+        sep = ('+' + '-'*17)*(t%div) + '+\n'
+        out(sep)
+        if totmpfile:
+            f.close()
+        
+    def dumpdays(self, date, days):
+        d = date
+        dates = list()
+        while True:
+            d = str(self.d.getPrevDate(d).date())
+            if d  in self.db:
+                dates.append(d)
+            if len(dates) >= days: break
+        for i in reversed(dates):
+            self.dump(i)
