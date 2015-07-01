@@ -254,6 +254,47 @@ class ogercontext:
         _debug('cal 9d %.2f' % ddd)
         return round(ddd,2)
 
+    def write2html(self, date):
+        if date not in self.db:
+            _warn('fail to dump. %s not exist' % date)
+            return
+
+        f = open(".tmp.html", "w");
+        out = f.write
+
+        out('<html><head></head></body>\n')
+        out('<style>')
+        out('th, td { border: 0px; }\n')
+        out('body { font-family: "Open Sans", sans-serif; }')
+        out('</style>')
+
+        ks = self.db.keys()
+        i = ks.index(date)
+        dates = ks[i-2:i+1]
+        for dd in reversed(dates):
+            out('<br><br><b>%s<b><br>' % str(dd))
+            out('<table cellpadding="18">\n')
+            t = len(self.rfields)
+            div = 10
+            b = 0
+            e = div
+            while b < e:
+                out('<tr>\n')
+                for i in range(b, e):
+                    out('<td bgcolor="#CCCCCC">%s</td>' % self.rfields[i])
+                out('</tr>\n')
+                out('<tr>\n')
+                for i in range(b, e):
+                    out('<td bgcolor="#eeeeee">%s</td>' % self.db[dd][i])
+                out('</tr>\n')
+                b += (div)
+                e += (div)
+                if e > t:
+                    e = t
+            out('</table>\n')
+        out('</body>\n')
+        f.close()
+
     def dump(self, date, totmpfile=False):
         if date not in self.db:
             _warn('fail to dump. %s not exist' % date)

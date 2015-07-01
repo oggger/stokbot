@@ -1,10 +1,16 @@
 #!/usr/bin/python
-
+# coding: utf-8
 import rlog
 import rutil
 import rdate
 import sys
 import datetime
+
+import os, sys
+
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from rdownload import ogerdownloader
 from rcontext import ogercontext
 from rdate import ogerdate
@@ -27,29 +33,34 @@ def usage():
     print "\t   <date> can be 'today' or YYYY-MM-DD format"
     print ''
 
-def send_email(sid, msg):
+def send_email(sid, html):
             import smtplib
-            gmail_user = "peacedog911@yahoo.com.tw"
-            gmail_pwd = "cardigan"
+            user = "peacedog911@yahoo.com.tw"
+            pwd = "cardigan"
+
             FROM = 'peacedog911@yahoo.com.tw'
             TO = ['peace.doggie@gmail.com', 'smewmew@gmail.com'] #must be a list
-            SUBJECT = "Daily Stokbot repot [%04d] @ %s" % (sid, str(datetime.date.today()))
-            TEXT = msg
+            SUBJECT = u"股哥機器人" + (' %04d @ %s' % (sid, str(datetime.date.today())))
 
-            # Prepare actual message
-            message = """\From: %s\nTo: %s\nSubject: %s\n\n%s
-            """ % (FROM, ", ".join(TO), SUBJECT, TEXT)
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = SUBJECT
+            msg['From'] = FROM
+            msg['To'] = 'MoneyGrabber'
+
+            part1 = MIMEText(html, 'html')
+            msg.attach(part1)
+
             try:
                 #server = smtplib.SMTP(SERVER) 
                 server = smtplib.SMTP("smtp.mail.yahoo.com", 587) #or port 465 doesn't seem to work!
                 server.ehlo()
                 server.starttls()
-                server.login(gmail_user, gmail_pwd)
-                server.sendmail(FROM, TO, message)
+                server.login(user, pwd)
+                server.sendmail(FROM, TO, msg.as_string())
                 #server.quit()
                 server.close()
-                print 'successfully sent the mail'
-            except smtplib.SMTPAuthenticationError as e:
+                print 'successfully sent the mail to %s' % str(TO)
+            except AttributeError as e:
                 print sys.exc_info()[0]
                 print e
                 print "failed to send mail"
@@ -78,15 +89,18 @@ if __name__ == '__main__':
         sid = int(sys.argv[2])
         c = ogercontext(sid)
         c.load()
-        if sys.argv[3] == 'today':
-            d = str(ogerdate().today())
-        else:
-            d = sys.argv[3]
-        c.dump(d, True)
-        with open('./.tmp.dump', 'rb') as f:
-            lines = f.readlines()
+        d = str(ogerdate().today())
+        c.write2html(d)
+        with open('./.tmp.html', 'rb') as f:
+            lines = f.read()
             f.close()
             send_email(c.stock_id, lines)
+    elif sys.argv[1] == 'html':
+        sid = int(sys.argv[2])
+        c = ogercontext(sid)
+        c.load()
+        d = str(ogerdate().today())
+        c.write2html(d)
     elif sys.argv[1] == 'dump':
         sid = int(sys.argv[2])
         c = ogercontext(sid)
