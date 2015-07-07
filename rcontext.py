@@ -270,7 +270,7 @@ class ogercontext:
         out = f.write
         out('<html><head></head></body>\n')
         out('<style>')
-        out('td { border: 0px; text-align: right; vertical-align: middle; padding: 6px;')
+        out('td { border: 0px; text-align: right; vertical-align: middle; padding: 15px;')
         out(' font-family:"Open Sans", sans-serif; font-size:16pt; font-weight: bold;}\n')
         out('th { padding: 6px; text-align: right; vertical-align: middle; background-color: #C2C2A3;}\n')
         out('body { font-family: "Open Sans", sans-serif; }\n')
@@ -283,7 +283,13 @@ class ogercontext:
             if i == ll[0]:
                 out('<td bgcolor="#C2C2A3">%s</td>\n' % i)
             else:
-                out('<td>%s</td>\n' % i)
+                if '+' in i:
+                    out('<td bgcolor="#EBAD99">%s</td>\n' % i)
+                elif '-' in i:
+                    out('<td bgcolor="#C2FFAD">%s</td>\n' % i)
+                else:
+                    out('<td>%s</td>\n' % i)
+                    
         out('</tr>\n')
 
     def writeoutHtmlTableRowHeader(self, f, ll):
@@ -303,7 +309,14 @@ class ogercontext:
         self.writeoutHtmlHead(f)
         f.write('<font size="32" color="#CC5200"><b>%d</b></font>' % self.stock_id)
         f.write('<table>\n')
-        self.writeoutHtmlTableRowHeader(f, [''] + dates)
+
+        rdates = list()
+        for i in dates:
+            i = i.split('-')
+            i = '%s/%s' % (i[1], i[2])
+            rdates.append(i)
+
+        self.writeoutHtmlTableRowHeader(f, [''] + rdates)
 
         values = list()
         for p in printed:
