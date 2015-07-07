@@ -85,7 +85,7 @@ class ogercontext:
         data = self.db
         with open(self.u.dbfile(), 'wb') as csvfile:
             writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            for i in data.keys():
+            for i in sorted(data.keys()):
                 d = data[i]
                 d.insert(0, i)
                 writer.writerow(d)
@@ -254,7 +254,69 @@ class ogercontext:
         _debug('cal 9d %.2f' % ddd)
         return round(ddd,2)
 
-    def write2html(self, date):
+
+    ### given a date, we return a lists of dates of days
+    ###  which market are opened. date included
+    def getPrevDates(self, date, days):
+        ks = self.db.keys()
+        i = ks.index(date)
+        if i-days+1 > 0:
+            dates = ks[i-days+1:i+1]
+        else:
+            dates = ks[0:i+1]
+        return dates
+
+    def writeoutHtmlHead(self, f):
+        out = f.write
+        out('<html><head></head></body>\n')
+        out('<style>')
+        out('td { border: 0px; text-align: right; vertical-align: middle; padding: 6px;')
+        out(' font-family:"Open Sans", sans-serif; font-size:16pt; font-weight: bold;}\n')
+        out('th { padding: 6px; text-align: right; vertical-align: middle; background-color: #C2C2A3;}\n')
+        out('body { font-family: "Open Sans", sans-serif; }\n')
+        out('</style>\n')
+
+    def writeoutHtmlTableRow(self, f, ll):
+        out = f.write
+        out('<tr>\n')
+        for i in ll:
+            if i == ll[0]:
+                out('<td bgcolor="#C2C2A3">%s</td>\n' % i)
+            else:
+                out('<td>%s</td>\n' % i)
+        out('</tr>\n')
+
+    def writeoutHtmlTableRowHeader(self, f, ll):
+        out = f.write
+        out('<tr>\n')
+        for i in ll:
+            out('<th>%s</th>\n' % i)
+        out('</tr>\n')
+        
+
+    ### dump days data into a table.
+    def write2html(self, date, days):
+        #find dates.
+        dates = self.getPrevDates(date, days)
+        printed = [5,3,4,2,6,8,15,16]
+        f = open("sample.html", "w");
+        self.writeoutHtmlHead(f)
+        f.write('<font size="32" color="#CC5200"><b>%d</b></font>' % self.stock_id)
+        f.write('<table>\n')
+        self.writeoutHtmlTableRowHeader(f, [''] + dates)
+
+        values = list()
+        for p in printed:
+            del values[:]
+            values.append(self.rfields[p])
+            for i in dates:
+                values.append(self.db[i][p])
+            self.writeoutHtmlTableRow(f, values)
+        f.write('</table>\n')
+        f.write('</body></html>\n')
+        f.close();
+
+    def write2htmlx(self, date):
         if date not in self.db:
             _warn('fail to dump. %s not exist' % date)
             return

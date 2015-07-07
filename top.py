@@ -36,7 +36,7 @@ def usage():
 def send_email(sid, html):
             import smtplib
             user = "peacedog911@yahoo.com.tw"
-            pwd = "cardigan"
+            pwd = ""
 
             FROM = 'peacedog911@yahoo.com.tw'
             TO = ['peace.doggie@gmail.com', 'smewmew@gmail.com'] #must be a list
@@ -65,10 +65,20 @@ def send_email(sid, html):
                 print e
                 print "failed to send mail"
 
+
+def resolveDateArg(s):
+    if s == 'today':
+        d = str(ogerdate().today())
+    else:
+        d = sys.argv[3]
+    return d
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         usage()
         exit(0)
+
+
     
     if sys.argv[1] == 'init':
         sid = int(sys.argv[2])
@@ -90,8 +100,8 @@ if __name__ == '__main__':
         c = ogercontext(sid)
         c.load()
         d = str(ogerdate().today())
-        c.write2html(d)
-        with open('./.tmp.html', 'rb') as f:
+        c.write2html(d,5)
+        with open('./sample.html', 'rb') as f:
             lines = f.read()
             f.close()
             send_email(c.stock_id, lines)
@@ -99,8 +109,7 @@ if __name__ == '__main__':
         sid = int(sys.argv[2])
         c = ogercontext(sid)
         c.load()
-        d = str(ogerdate().today())
-        c.write2html(d)
+        c.write2html(resolveDateArg(sys.argv[3]),5)
     elif sys.argv[1] == 'dump':
         sid = int(sys.argv[2])
         c = ogercontext(sid)
@@ -111,22 +120,3 @@ if __name__ == '__main__':
             d = sys.argv[3]
         c.dump(d)
         c.dump(d, True)
-    elif sys.argv[1] == 'dump3':
-        sid = int(sys.argv[2])
-        c = ogercontext(sid)
-        c.load()
-        if sys.argv[3] == 'today':
-            d = str(ogerdate().today())
-        else:
-            d = sys.argv[3]
-        c.dumpdays(d,3)
-    elif sys.argv[1] == 'dump30':
-        sid = int(sys.argv[2])
-        c = ogercontext(sid)
-        c.load()
-        if sys.argv[3] == 'today':
-            d = str(ogerdate().today())
-        else:
-            d = sys.argv[3]
-        c.dumpdays(d,30)
-        
