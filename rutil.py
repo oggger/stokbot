@@ -25,8 +25,15 @@ class ogerutil:
         _debug('monfile %s' % filename)
         return filename
 
+    def isDBFileExist(self):
+        fn = self.dbfile()
+        if os.path.exists(fn):
+            return True
+        else:
+            return False
+
     def dbfile(self):
-        filename = self.dbdir() + ('%04d.db' % self.stock_id)
+        filename = self.dbdir() + ('%04d.db' % int(self.stock_id))
         _debug('dbfile %s' % filename)
         return filename
     

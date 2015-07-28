@@ -5,6 +5,7 @@ import csv
 import re
 import datetime
 import sys
+import time
 from collections import OrderedDict
 
 from rutil import ogerutil
@@ -20,7 +21,6 @@ _debug = log.debug
 _warn  = log.warning
 _err   = log.error
 _crit  = log.critical
-
 
 class ogercontext:
     fields = { 'AllVol'      : [0,  None], # Trading volume in stock smallest unit
@@ -98,11 +98,12 @@ class ogercontext:
         n = len(self.fields)
         for k in self.db.keys():
             if n - len(self.db[k]) > 0:
-                _info('padding context db @ %s to %d fields.' % (k, n))
+                _debug('padding context db @ %s to %d fields.' % (k, n))
                 self.db[k].extend([None]*(n - len(self.db[k])))
 
     ### after padding, we need to update each extend fields value
     def calextends(self, overwrite=False):
+        _info('%s' % time.strftime('%c'))
         _info('calculate extended fields. %s' % self.stock_id)
         n = len(self.fields)
         for k in self.db.keys():
@@ -111,6 +112,7 @@ class ogercontext:
                     self.db[k][i] = self.fields[self.rfields[i]][1](k)
                 elif self.db[k][i] == "" or self.db[k][i] == None:
                     self.db[k][i] = self.fields[self.rfields[i]][1](k)
+        _info('%s' % time.strftime('%c'))
 
     def stat(self):
         _info('# of days : %d' % len(self.db))
@@ -157,7 +159,7 @@ class ogercontext:
     def updatemissing(self):
         _info('ID=%04d ready to download and update data up to today.' % self.stock_id)
         dates = self._downloadmissingdata()
-        if dates == None:
+        if dates == False:
             _info('no data to be update.')
             return False
 
@@ -195,6 +197,7 @@ class ogercontext:
 
     ###############################################################################
     # do calculation functions below ##############################################
+    ###############################################################################
     def calVolume(self, k):
         o = int(self.db[k][0].replace(",",""))
         x = o/1000
@@ -254,165 +257,3 @@ class ogercontext:
         _debug('cal 9d %.2f' % ddd)
         return round(ddd,2)
 
-
-    ### given a date, we return a lists of dates of days
-    ###  which market are opened. date included
-    def getPrevDates(self, date, days):
-        ks = self.db.keys()
-        i = ks.index(date)
-        if i-days+1 > 0:
-            dates = ks[i-days+1:i+1]
-        else:
-            dates = ks[0:i+1]
-        return dates
-
-    def writeoutHtmlHead(self, f):
-        out = f.write
-        out('<html><head></head></body>\n')
-        out('<style>')
-        out('td { border: 0px; text-align: right; vertical-align: middle; padding: 15px;')
-        out(' font-family:"Open Sans", sans-serif; font-size:16pt; font-weight: bold;}\n')
-        out('th { padding: 6px; text-align: right; vertical-align: middle; background-color: #C2C2A3;}\n')
-        out('body { font-family: "Open Sans", sans-serif; }\n')
-        out('</style>\n')
-
-    def writeoutHtmlTableRow(self, f, ll):
-        out = f.write
-        out('<tr>\n')
-        for i in ll:
-            if i == ll[0]:
-                out('<td bgcolor="#C2C2A3">%s</td>\n' % i)
-            else:
-                if '+' in i:
-                    out('<td bgcolor="#EBAD99">%s</td>\n' % i)
-                elif '-' in i:
-                    out('<td bgcolor="#C2FFAD">%s</td>\n' % i)
-                else:
-                    out('<td>%s</td>\n' % i)
-                    
-        out('</tr>\n')
-
-    def writeoutHtmlTableRowHeader(self, f, ll):
-        out = f.write
-        out('<tr>\n')
-        for i in ll:
-            out('<th>%s</th>\n' % i)
-        out('</tr>\n')
-        
-
-    ### dump days data into a table.
-    def write2html(self, date, days):
-        #find dates.
-        dates = self.getPrevDates(date, days)
-        printed = [5,3,4,2,6,8,15,16]
-        f = open("sample.html", "w");
-        self.writeoutHtmlHead(f)
-        f.write('<font size="32" color="#CC5200"><b>%d</b></font>' % self.stock_id)
-        f.write('<table>\n')
-
-        rdates = list()
-        for i in dates:
-            i = i.split('-')
-            i = '%s/%s' % (i[1], i[2])
-            rdates.append(i)
-
-        self.writeoutHtmlTableRowHeader(f, [''] + rdates)
-
-        values = list()
-        for p in printed:
-            del values[:]
-            values.append(self.rfields[p])
-            for i in dates:
-                values.append(self.db[i][p])
-            self.writeoutHtmlTableRow(f, values)
-        f.write('</table>\n')
-        f.write('</body></html>\n')
-        f.close();
-
-    def write2htmlx(self, date):
-        if date not in self.db:
-            _warn('fail to dump. %s not exist' % date)
-            return
-
-        f = open(".tmp.html", "w");
-        out = f.write
-
-        out('<html><head></head></body>\n')
-        out('<style>')
-        out('th, td { border: 0px; }\n')
-        out('body { font-family: "Open Sans", sans-serif; }')
-        out('</style>')
-
-        ks = self.db.keys()
-        i = ks.index(date)
-        dates = ks[i-2:i+1]
-        for dd in reversed(dates):
-            out('<br><br><b>%s<b><br>' % str(dd))
-            out('<table cellpadding="18">\n')
-            t = len(self.rfields)
-            div = 10
-            b = 0
-            e = div
-            while b < e:
-                out('<tr>\n')
-                for i in range(b, e):
-                    out('<td bgcolor="#CCCCCC">%s</td>' % self.rfields[i])
-                out('</tr>\n')
-                out('<tr>\n')
-                for i in range(b, e):
-                    out('<td bgcolor="#eeeeee">%s</td>' % self.db[dd][i])
-                out('</tr>\n')
-                b += (div)
-                e += (div)
-                if e > t:
-                    e = t
-            out('</table>\n')
-        out('</body>\n')
-        f.close()
-
-    def dump(self, date, totmpfile=False):
-        if date not in self.db:
-            _warn('fail to dump. %s not exist' % date)
-            return
-        if totmpfile:
-            f = open(".tmp.dump", "w");
-            out = f.write
-        else:
-            out = sys.stdout.write
-
-        t = len(self.rfields)
-        div = 6
-        b = 0
-        e = div
-        sep = ('+' + '-'*17)*div + '+\n'
-        sep1 = ('+>>> %s <<' % date) + ('+' + '-'*17)*(div-1) + '+\n'
-        while b < e:
-            if b == 0:
-                out(sep1)
-            else:
-                out(sep)
-            for i in range(b, e):
-                out('| %15s ' % self.rfields[i])
-            out('|\n')
-            for i in range(b, e):
-                out('| %15s ' % self.db[date][i])
-            out('|\n')
-            b += (div)
-            e += (div)
-            if e > t:
-                e = t
-        sep = ('+' + '-'*17)*(t%div) + '+\n'
-        out(sep)
-        if totmpfile:
-            f.close()
-        
-    def dumpdays(self, date, days):
-        d = date
-        dates = list()
-        while True:
-            d = str(self.d.getPrevDate(d).date())
-            if d  in self.db:
-                dates.append(d)
-            if len(dates) >= days: break
-        for i in reversed(dates):
-            self.dump(i)

@@ -5,15 +5,17 @@ import rutil
 import rdate
 import sys
 import datetime
+import time
 
 import os, sys
-
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from rdownload import ogerdownloader
 from rcontext import ogercontext
 from rdate import ogerdate
+from rhtmlwriter import ogerhtmlwriter
+from remail import ogeremail
+from rtextdump import ogertxtdump
+from rutil import ogerutil
 
 import logging
 from rlog import ogerlogger
@@ -26,45 +28,25 @@ _err   = log.error
 _crit  = log.critical
 
 def usage():
-    print '\t./stokbot.py init   <id>       : download and build <id> db'
-    print '\t./stokbot.py update <id>       : update <id> db up to today'
-    print '\t./stokbot.py dump <id> <date>  : dump data of <id> at <date>'
-    print '\t./stokbot.py dump3 <id> <date> : dump 3days data of <id> at <date>'
-    print "\t   <date> can be 'today' or YYYY-MM-DD format"
+    print '\t./stokbot.py update     : update or init db listed in stok.list'
     print ''
 
-def send_email(sid, html):
-            import smtplib
-            user = "peacedog911@yahoo.com.tw"
-            pwd = ""
+def init(stock_id):
+    stock_id = int(stock_id)
+    d = ogerdownloader(stock_id)
+    d.mergemonfile2db()
+    d.gendbfile()
+    c = ogercontext(stock_id)
+    c.load()
+    c.pad()
+    c.calextends(False)
+    c.store()
 
-            FROM = 'peacedog911@yahoo.com.tw'
-            TO = ['peace.doggie@gmail.com', 'smewmew@gmail.com'] #must be a list
-            SUBJECT = u"股哥機器人" + (' %04d @ %s' % (sid, str(datetime.date.today())))
-
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = SUBJECT
-            msg['From'] = FROM
-            msg['To'] = 'MoneyGrabber'
-
-            part1 = MIMEText(html, 'html')
-            msg.attach(part1)
-
-            try:
-                #server = smtplib.SMTP(SERVER) 
-                server = smtplib.SMTP("smtp.mail.yahoo.com", 587) #or port 465 doesn't seem to work!
-                server.ehlo()
-                server.starttls()
-                server.login(user, pwd)
-                server.sendmail(FROM, TO, msg.as_string())
-                #server.quit()
-                server.close()
-                print 'successfully sent the mail to %s' % str(TO)
-            except AttributeError as e:
-                print sys.exc_info()[0]
-                print e
-                print "failed to send mail"
-
+def update(stock_id):
+    stock_id = int(stock_id)
+    c = ogercontext(stock_id)
+    c.load()
+    c.updatemissing()
 
 def resolveDateArg(s):
     if s == 'today':
@@ -73,50 +55,68 @@ def resolveDateArg(s):
         d = sys.argv[3]
     return d
 
+def update_all():
+    _info('starting daily update procedure..')
+    with open('stok.list', 'r') as f:
+        ids = f.readlines()
+    f.close()
+    for i in ids:
+        u = ogerutil(i)
+            ### TODO, FIXME, this is bad to decide init() by check db file. 
+            ### we do immediatedly merge to db when download only one month data....
+        if u.isDBFileExist():
+            _info('updating #%d' % int(i))
+            update(i)
+        else:
+            _info('initialize #%d' % int(i))
+            _info('it may take times to download, please be patient')
+            _info('%s' % time.strftime('%c'))
+            init(int(i))
+
+def report_all():
+    filename = './sample.html'
+    w = ogerhtmlwriter()
+    w.open(filename)
+    w.head()
+    with open('stok.list', 'r') as f:
+        ids = f.readlines()
+    f.close()
+    for i in ids:
+        c = ogercontext(int(i))
+        c.load()
+        w.prepare(c)
+        w.write(str(ogerdate().today()), 10)
+        w.end()
+        del c
+        _info('data %s have been written into %s' % (i.strip(), filename))
+    w.close()
+    del w
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         usage()
         exit(0)
 
-
-    
-    if sys.argv[1] == 'init':
-        sid = int(sys.argv[2])
-        d = ogerdownloader(sid)
-        d.mergemonfile2db()
-        d.gendbfile()
-        c = ogercontext(sid)
-        c.load()
-        c.pad()
-        c.calextends(False)
-        c.store()
     elif sys.argv[1] == 'update':
-        sid = int(sys.argv[2])
-        c = ogercontext(sid)
-        c.load()
-        c.updatemissing()
+        update_all()
+    elif sys.argv[1] == 'report':
+        report_all()
     elif sys.argv[1] == 'email':
-        sid = int(sys.argv[2])
-        c = ogercontext(sid)
-        c.load()
-        d = str(ogerdate().today())
-        c.write2html(d,5)
+        TO = ['peace.doggie@gmail.com'] #must be a list
+        e = ogeremail("", "", "", TO)
         with open('./sample.html', 'rb') as f:
             lines = f.read()
             f.close()
-            send_email(c.stock_id, lines)
-    elif sys.argv[1] == 'html':
-        sid = int(sys.argv[2])
-        c = ogercontext(sid)
-        c.load()
-        c.write2html(resolveDateArg(sys.argv[3]),5)
+            e.send(lines)
+
     elif sys.argv[1] == 'dump':
-        sid = int(sys.argv[2])
-        c = ogercontext(sid)
-        c.load()
-        if sys.argv[3] == 'today':
-            d = str(ogerdate().today())
-        else:
-            d = sys.argv[3]
-        c.dump(d)
-        c.dump(d, True)
+        with open('stok.list', 'r') as f:
+            ids = f.readlines()
+        f.close()
+        for i in ids:
+            c = ogercontext(i)
+            c.load()
+            d = ogertxtdump(c)
+            d.dump(resolveDateArg('today'))
+            del c
+            del d

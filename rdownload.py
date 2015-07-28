@@ -57,6 +57,7 @@ class ogerdownloader:
 
     ### we combine all monthly data and store into on context db file.
     def mergemonfile2db(self):
+        self.u.setupdir()
         datalines = list()
         for y in range(self.d.getFirstYear(), self.d.getThisYear()+1):
             for m in range(1, 13):
